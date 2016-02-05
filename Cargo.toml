@@ -5,4 +5,5 @@ authors = ["daa84 <daa84@inbox.ru>"]
 
 [dependencies]
 toml = "0.1"
+zip = "0.1"
 ftp = "0.0"

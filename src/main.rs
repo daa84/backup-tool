@@ -13,42 +13,41 @@ struct Settings {
 const CONFIG_FILE: &'static str = "config.toml";
 
 fn main() {
-    println!("Load config '{}' ...", CONFIG_FILE);
 
     // TODO: process errors to email
-    let settings = load_settings().unwrap();
-    run_commands(&settings.commands);
+    match run() {
+        Err(e) => println!("Error in backup {}", e.description()),
+        Ok(_) => println!("Backup finished")
+    }
+    
 }
 
-fn run_commands(commands: &[String]) -> Result<(), String> {
+fn run() -> Result<(), SimpleError> {
+    let settings = try!(load_settings());
+    try!(run_commands(&settings.commands));
+    Ok(())
+}
+
+fn run_commands(commands: &[String]) -> Result<(), SimpleError> {
     for command in commands {
         println!("Execute {} ...", command);
-        let status = match Command::new(command).status() {
-            Err(e) => return Err(format!("Failed to execute process: {}", e)),
-            Ok(status) => status
-        };
+        let status = try!(Command::new(command).status());
         println!("Status {}", status);
     }
     Ok(())
 }
 
-fn load_settings() -> Result<Settings, String> {
+fn load_settings() -> Result<Settings, SimpleError> {
+    println!("Load config '{}' ...", CONFIG_FILE);
+
+    let mut f = try!(File::open(CONFIG_FILE));
+
     let mut config_str = String::new();
 
-    match File::open(CONFIG_FILE) {
-        Err(msg) => return Err(msg.description().to_string()),
-        Ok(mut f) => 
-            if let Err(msg) = f.read_to_string(&mut config_str) {
-                return Err(msg.description().to_string());
-            }
-    };
-        
+    try!(f.read_to_string(&mut config_str));
 
     let mut parser = toml::Parser::new(&config_str);
-    let config = match parser.parse() {
-        None => return Err(format!("Can't parse config file, {:?}", parser.errors)),
-        Some(config) => config
-    };
+    let config = try!(parser.parse().ok_or(SimpleError::Str(format!("Can't parse config file, {:?}", parser.errors))));
 
     let commands = match config.get("run") {
         None => {
@@ -62,8 +61,11 @@ fn load_settings() -> Result<Settings, String> {
                     vec![]
                 },
                 Some(commands) => {
-                    commands.as_slice().expect("Wrong type of comands section")
-                        .iter().map(|v| v.as_str().expect("Command must be string").to_string()).collect::<Vec<String>>()
+                    let commands_slice = 
+                        try!(commands.as_slice().ok_or(SimpleError::Str("Wrong type of comands section".to_owned())));
+                    try!(commands_slice.iter()
+                         .map(|v| v.as_str().map(|s| s.to_string()).ok_or(SimpleError::Str("Command must be string".to_owned())))
+                         .collect::<Result<Vec<String>, SimpleError>>())
                 }
             }
         }
@@ -73,4 +75,39 @@ fn load_settings() -> Result<Settings, String> {
         commands: commands
     })
 }
+
+
+#[derive(Debug)]
+enum SimpleError {
+    Str(String),
+    IoError(std::io::Error),
+}
+
+impl From<std::io::Error> for SimpleError {
+    fn from(e: std::io::Error) -> Self {
+        SimpleError::IoError(e)
+    }
+}
+
+
+impl std::fmt::Display for SimpleError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(fmt, "Error: {}", self.description())
+    }
+}
+
+impl Error for SimpleError {
+    fn description(&self) -> &str {
+        match self {
+            &SimpleError::Str(ref msg) => msg,
+            &SimpleError::IoError(ref e) => e.description()
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        None
+    }
+}
+
+
 

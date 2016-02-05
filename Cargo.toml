@@ -1,0 +1,8 @@
+[package]
+name = "backup-tool"
+version = "0.1.0"
+authors = ["daa84 <daa84@inbox.ru>"]
+
+[dependencies]
+toml = "0.1"
+ftp = "0.0"

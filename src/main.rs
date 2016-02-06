@@ -2,11 +2,18 @@
 extern crate rustc_serialize;
 extern crate toml;
 extern crate ftp;
+extern crate tempdir;
+extern crate zip;
 
 use std::io::prelude::*;
 use std::fs::File;
 use std::error::Error;
 use std::process::Command;
+
+use zip::ZipWriter;
+use zip::result::ZipError;
+
+use tempdir::TempDir;
 
 use ftp::FTPStream;
 
@@ -51,13 +58,45 @@ fn main() {
 
 fn run(settings: &Settings) -> Result<(), SimpleError> {
     try!(run_commands(&settings.run.commands));
+
+    let temp_dir = try!(TempDir::new("backup-tool"));
+    try!(create_archive(&temp_dir, &settings.src));
     try!(send_to_ftp(&settings));
+    Ok(())
+}
+
+fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<(), SimpleError> {
+    let file = try!(File::create(&temp_dir.path().join("backup.zip")));
+
+    let mut zip = ZipWriter::new(file);
+
+    for src in src_list {
+        try!(write_dir(&mut zip, &src));
+    }
+
+    try!(zip.finish());
+    Ok(())
+}
+
+fn write_dir(zip: &mut ZipWriter<File>, src: &Src) -> Result<(), SimpleError> {
+    //try!(zip.start_file("test/", zip::CompressionMethod::Stored));
+
+    //try!(zip.start_file("test/☃.txt", zip::CompressionMethod::Stored));
+    //try!(zip.write_all(b"Hello, World!\n"));
+
+    //try!(zip.start_file("test/lorem_ipsum.txt", zip::CompressionMethod::Deflated));
+    //try!(zip.write_all(LOREM_IPSUM));
     Ok(())
 }
 
 fn send_to_ftp(settings: &Settings) -> Result<(), SimpleError> {
     let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port));
     try!(ftp_stream.login(&settings.ftp.user, &settings.ftp.pass));
+
+    for src in &settings.src {
+        
+    }
+
     ftp_stream.quit();
     Ok(())
 }
@@ -100,6 +139,12 @@ impl From<std::io::Error> for SimpleError {
 impl From<String> for SimpleError {
     fn from(e: String) -> Self {
         SimpleError::Str(e)
+    }
+}
+
+impl From<ZipError> for SimpleError {
+    fn from(e: ZipError) -> Self {
+        SimpleError::Str(e.description().to_owned())
     }
 }
 

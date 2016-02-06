@@ -7,3 +7,5 @@ authors = ["daa84 <daa84@inbox.ru>"]
 toml = "0.1"
 zip = "0.1"
 ftp = "0.0"
+rustc-serialize = "0.3"
+lettre = "0.5"

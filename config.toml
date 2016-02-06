@@ -1,3 +1,13 @@
 [run]
 commands = ["E:/daa/backup_scriptsr/backup_mssql.bat"]
 
+[ftp]
+host = "localhost"
+port = 21
+user = "user"
+pass = "pass"
+
+[[src]]
+prefix = "mongodb"
+path = "C:/xxx"
+

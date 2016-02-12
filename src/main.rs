@@ -4,6 +4,7 @@ extern crate toml;
 extern crate ftp;
 extern crate tempdir;
 extern crate zip;
+extern crate walkdir;
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -11,11 +12,12 @@ use std::error::Error;
 use std::process::Command;
 
 use zip::ZipWriter;
-use zip::result::ZipError;
 
 use tempdir::TempDir;
 
 use ftp::FTPStream;
+
+use walkdir::WalkDir;
 
 #[derive(RustcDecodable)]
 struct Ftp {
@@ -50,23 +52,23 @@ fn main() {
 
     // TODO: process errors to email
     match run(&settings) {
-        Err(e) => println!("Error in backup: {}", e.description()),
+        Err(e) => println!("Error in backup: {}", e),
         Ok(_) => println!("Backup finished")
     }
     
 }
 
-fn run(settings: &Settings) -> Result<(), SimpleError> {
+fn run(settings: &Settings) -> Result<(), String> {
     try!(run_commands(&settings.run.commands));
 
-    let temp_dir = try!(TempDir::new("backup-tool"));
+    let temp_dir = try!(TempDir::new("backup-tool").map_err(|e|e.to_string()));
     try!(create_archive(&temp_dir, &settings.src));
     try!(send_to_ftp(&settings));
     Ok(())
 }
 
-fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<(), SimpleError> {
-    let file = try!(File::create(&temp_dir.path().join("backup.zip")));
+fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<(), String> {
+    let file = try!(File::create(&temp_dir.path().join("backup.zip")).map_err(|e|e.to_string()));
 
     let mut zip = ZipWriter::new(file);
 
@@ -74,38 +76,38 @@ fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<(), SimpleE
         try!(write_dir(&mut zip, &src));
     }
 
-    try!(zip.finish());
+    try!(zip.finish().map_err(|e|e.to_string()));
     Ok(())
 }
 
-fn write_dir(zip: &mut ZipWriter<File>, src: &Src) -> Result<(), SimpleError> {
-    //try!(zip.start_file("test/", zip::CompressionMethod::Stored));
-
-    //try!(zip.start_file("test/☃.txt", zip::CompressionMethod::Stored));
-    //try!(zip.write_all(b"Hello, World!\n"));
-
-    //try!(zip.start_file("test/lorem_ipsum.txt", zip::CompressionMethod::Deflated));
-    //try!(zip.write_all(LOREM_IPSUM));
+fn write_dir(zip: &mut ZipWriter<File>, src: &Src) -> Result<(), String> {
+    for entry in WalkDir::new(&src.path) {
+        let dir_entry = try!(entry.map_err(|e|e.to_string()));
+        let path = dir_entry.path();
+        let zip_path = path.join(&src.prefix);
+        
+        try!(zip.start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Stored).map_err(|e|e.to_string()));
+        if path.is_file() {
+            let mut file_content = try!(File::open(path).map_err(|e|e.to_string()));
+            try!(std::io::copy(&mut file_content, zip).map_err(|e|e.to_string()));
+        }
+    }
     Ok(())
 }
 
-fn send_to_ftp(settings: &Settings) -> Result<(), SimpleError> {
-    let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port));
+fn send_to_ftp(settings: &Settings) -> Result<(), String> {
+    let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port).map_err(|e|e.to_string()));
     try!(ftp_stream.login(&settings.ftp.user, &settings.ftp.pass));
 
-    for src in &settings.src {
-        
-    }
-
-    ftp_stream.quit();
+    try!(ftp_stream.quit().map_err(|e|e.to_string()));
     Ok(())
 }
 
-fn run_commands(commands: &[String]) -> Result<(), SimpleError> {
+fn run_commands(commands: &[String]) -> Result<(), String> {
     println!("Execute commands");
     for command in commands {
         println!("Execute '{}' ...", command);
-        let status = try!(Command::new(command).status());
+        let status = try!(Command::new(command).status().map_err(|e|e.to_string()));
         println!("Status '{}'", status);
     }
     Ok(())
@@ -122,50 +124,4 @@ fn load_settings() -> Settings {
 
     toml::decode_str(&config_str).expect("can't decode config string")
 }
-
-
-#[derive(Debug)]
-enum SimpleError {
-    Str(String),
-    IoError(std::io::Error),
-}
-
-impl From<std::io::Error> for SimpleError {
-    fn from(e: std::io::Error) -> Self {
-        SimpleError::IoError(e)
-    }
-}
-
-impl From<String> for SimpleError {
-    fn from(e: String) -> Self {
-        SimpleError::Str(e)
-    }
-}
-
-impl From<ZipError> for SimpleError {
-    fn from(e: ZipError) -> Self {
-        SimpleError::Str(e.description().to_owned())
-    }
-}
-
-impl std::fmt::Display for SimpleError {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "Error: {}", self.description())
-    }
-}
-
-impl Error for SimpleError {
-    fn description(&self) -> &str {
-        match self {
-            &SimpleError::Str(ref msg) => msg,
-            &SimpleError::IoError(ref e) => e.description()
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        None
-    }
-}
-
-
 

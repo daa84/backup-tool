@@ -6,6 +6,9 @@ host = "localhost"
 port = 21
 user = "user"
 pass = "pass"
+path = "backup_dir"
+backup_file_name = "backup"
+backup_suffix_format = ""
 
 [[src]]
 prefix = "mongodb"

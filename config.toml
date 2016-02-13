@@ -14,3 +14,13 @@ backup_suffix_format = ""
 prefix = "mongodb"
 path = "C:/xxx"
 
+[notify]
+error_address = ""
+success_address = ""
+
+smtp_host = ""
+smtp_user = ""
+smtp_pass = ""
+smtp_port = 
+smtp_from = ""
+

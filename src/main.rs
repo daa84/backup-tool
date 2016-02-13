@@ -10,6 +10,7 @@ extern crate tempdir;
 extern crate zip;
 extern crate walkdir;
 extern crate time;
+extern crate lettre;
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -26,6 +27,23 @@ use ftp::FTPStream;
 use walkdir::WalkDir;
 
 use time::{strftime, now};
+
+use lettre::email::EmailBuilder;
+use lettre::transport::smtp::{SecurityLevel, SmtpTransportBuilder};
+use lettre::transport::smtp::authentication::Mecanism;
+use lettre::transport::EmailTransport;
+
+#[derive(RustcDecodable)]
+struct Notify {
+    error_address: Vec<String>,
+    success_address: Vec<String>,
+
+    smtp_host: String,
+    smtp_user: String,
+    smtp_pass: String,
+    smtp_port: u16,
+    smtp_from: String,
+}
 
 #[derive(RustcDecodable)]
 struct Ftp {
@@ -54,6 +72,7 @@ struct Settings {
     run: Run,
     ftp: Ftp,
     src: Vec<Src>,
+    notify: Notify,
 }
 
 const CONFIG_FILE: &'static str = "config.toml";
@@ -63,12 +82,49 @@ fn main() {
 
     let settings = load_settings();
 
-    // TODO: process errors to email
     match run(&settings) {
-        Err(e) => println!("Error in backup: {}", e),
-        Ok(_) => println!("Backup finished"),
+        Err(e) => {
+            error!("Error {}", e);
+            notify(&settings.notify, &settings.notify.error_address, "Error backup", &e);
+        },
+        Ok(_) => {
+            info!("Backup finished successfull");
+            notify(&settings.notify, &settings.notify.success_address, "Backup finished", "Ok");
+        },
+    };
+}
+
+fn notify(notify: &Notify, tos: &Vec<String>, subject: &str, body: &str) {
+    if tos.is_empty() {
+        return
     }
 
+    let smtp_from: &str = &notify.smtp_from;
+    let smtp_host: &str = &notify.smtp_host;
+
+    let mut builder = EmailBuilder::new();
+    for to in tos {
+        let to_str: &str = to;
+        builder = builder.to(to_str);
+    }
+
+    let email = builder.sender(smtp_from).subject(&subject).body(&body).build().unwrap();
+
+    // Connect to a remote server on a custom port
+    let mut mailer = SmtpTransportBuilder::new((smtp_host,
+                                                notify.smtp_port)).unwrap()
+        // Add credentials for authentication
+        .credentials(&notify.smtp_user, &notify.smtp_pass)
+        // Specify a TLS security level. You can also specify an SslContext with
+        // .ssl_context(SslContext::Ssl23)
+        .security_level(SecurityLevel::AlwaysEncrypt)
+        // Enable SMTPUTF8 is the server supports it
+        .smtp_utf8(true)
+        // Configure accepted authetication mechanisms
+        .authentication_mecanisms(vec![Mecanism::CramMd5])
+        .build();
+
+    mailer.send(email).ok().expect("Can't send mail");
 }
 
 fn run(settings: &Settings) -> Result<(), String> {

@@ -35,7 +35,7 @@ struct Ftp {
     pass: String,
     backup_dir: String,
     backup_file_name: String,
-    backup_suffix_format: String
+    backup_suffix_format: String,
 }
 
 #[derive(RustcDecodable)]
@@ -46,14 +46,14 @@ struct Run {
 #[derive(RustcDecodable)]
 struct Src {
     path: String,
-    prefix: String
+    prefix: String,
 }
 
 #[derive(RustcDecodable)]
 struct Settings {
     run: Run,
     ftp: Ftp,
-    src: Vec<Src>
+    src: Vec<Src>,
 }
 
 const CONFIG_FILE: &'static str = "config.toml";
@@ -66,15 +66,15 @@ fn main() {
     // TODO: process errors to email
     match run(&settings) {
         Err(e) => println!("Error in backup: {}", e),
-        Ok(_) => println!("Backup finished")
+        Ok(_) => println!("Backup finished"),
     }
-    
+
 }
 
 fn run(settings: &Settings) -> Result<(), String> {
     try!(run_commands(&settings.run.commands));
 
-    let temp_dir = try!(TempDir::new("backup-tool").map_err(|e|e.to_string()));
+    let temp_dir = try!(TempDir::new("backup-tool").map_err(|e| e.to_string()));
     let archive = try!(create_archive(&temp_dir, &settings.src));
     try!(send_to_ftp(&archive, &settings));
     Ok(())
@@ -82,7 +82,7 @@ fn run(settings: &Settings) -> Result<(), String> {
 
 fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<PathBuf, String> {
     let archive_path = temp_dir.path().join("backup.zip");
-    let file = try!(File::create(&archive_path).map_err(|e|e.to_string()));
+    let file = try!(File::create(&archive_path).map_err(|e| e.to_string()));
 
     let mut zip = ZipWriter::new(file);
 
@@ -90,31 +90,34 @@ fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<PathBuf, St
         try!(write_dir(&mut zip, &src));
     }
 
-    try!(zip.finish().map_err(|e|e.to_string()));
+    try!(zip.finish().map_err(|e| e.to_string()));
     Ok(archive_path)
 }
 
 fn write_dir(zip: &mut ZipWriter<File>, src: &Src) -> Result<(), String> {
     for entry in WalkDir::new(&src.path) {
-        let dir_entry = try!(entry.map_err(|e|e.to_string()));
+        let dir_entry = try!(entry.map_err(|e| e.to_string()));
         let path = dir_entry.path();
         let zip_path = Path::new(&src.prefix).join(&path);
-        
-        try!(zip.start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Stored).map_err(|e|e.to_string()));
+
+        try!(zip.start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Stored)
+                .map_err(|e| e.to_string()));
         if path.is_file() {
-            let mut file_content = try!(File::open(path).map_err(|e|e.to_string()));
-            try!(std::io::copy(&mut file_content, zip).map_err(|e|e.to_string()));
+            let mut file_content = try!(File::open(path).map_err(|e| e.to_string()));
+            try!(std::io::copy(&mut file_content, zip).map_err(|e| e.to_string()));
         }
     }
     Ok(())
 }
 
 fn send_to_ftp(archive: &Path, settings: &Settings) -> Result<(), String> {
-    let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port).map_err(|e|e.to_string()));
+    let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port)
+                                  .map_err(|e| e.to_string()));
     try!(ftp_stream.login(&settings.ftp.user, &settings.ftp.pass));
 
     try!(ftp_stream.change_dir(&settings.ftp.backup_dir));
-    let time_str = try!(strftime(&settings.ftp.backup_suffix_format, &now()).map_err(|e| e.to_string()));
+    let time_str = try!(strftime(&settings.ftp.backup_suffix_format, &now())
+                            .map_err(|e| e.to_string()));
     let target_file_format = format!("{}-{}", settings.ftp.backup_file_name, time_str);
 
     let mut target_file = format!("{}.zip", target_file_format);
@@ -131,7 +134,7 @@ fn send_to_ftp(archive: &Path, settings: &Settings) -> Result<(), String> {
     let mut src_file = try!(File::open(archive).map_err(|e| e.to_string()));
     try!(ftp_stream.stor(&target_file, &mut src_file));
 
-    try!(ftp_stream.quit().map_err(|e|e.to_string()));
+    try!(ftp_stream.quit().map_err(|e| e.to_string()));
     Ok(())
 }
 
@@ -139,7 +142,7 @@ fn run_commands(commands: &[String]) -> Result<(), String> {
     info!("Execute commands");
     for command in commands {
         info!("Execute '{}' ...", command);
-        let status = try!(Command::new(command).status().map_err(|e|e.to_string()));
+        let status = try!(Command::new(command).status().map_err(|e| e.to_string()));
         info!("Status '{}'", status);
     }
     Ok(())
@@ -156,4 +159,3 @@ fn load_settings() -> Settings {
 
     toml::decode_str(&config_str).expect("can't decode config string")
 }
-

@@ -15,12 +15,12 @@ prefix = "mongodb"
 path = "C:/xxx"
 
 [notify]
-error_address = ""
-success_address = ""
+error_address = [""]
+success_address = [""]
 
 smtp_host = ""
 smtp_user = ""
 smtp_pass = ""
-smtp_port = 
+smtp_port = 1
 smtp_from = ""
 

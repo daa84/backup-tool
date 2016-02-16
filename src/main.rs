@@ -39,7 +39,13 @@ use settings::*;
 fn main() {
     log4rs::init_file("log.toml", Default::default()).unwrap();
 
-    let settings = Settings::load();
+    let settings = match Settings::load() {
+        Err(err) => {
+            error!("{}", err);
+            panic!(err)
+        }
+        Ok(value) => value,
+    };
 
     match run(&settings) {
         Err(e) => {
@@ -134,7 +140,7 @@ fn send_to_ftp(archive: &Path, settings: &Settings) -> Result<(), Box<Error>> {
     let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port));
     try!(ftp_stream.login(&settings.ftp.user, &settings.ftp.pass));
 
-    try!(ftp_stream.change_dir(&settings.ftp.backup_dir));
+    try!(ftp_stream.change_dir(&settings.ftp.path));
     let time_str = try!(strftime(&settings.ftp.backup_suffix_format, &now()));
     let target_file_format = format!("{}-{}", settings.ftp.backup_file_name, time_str);
 

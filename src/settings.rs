@@ -1,4 +1,3 @@
-
 extern crate toml;
 
 use std::fs::File;
@@ -22,7 +21,7 @@ pub struct Ftp {
     pub port: u16,
     pub user: String,
     pub pass: String,
-    pub backup_dir: String,
+    pub path: String,
     pub backup_file_name: String,
     pub backup_suffix_format: String,
 }
@@ -46,10 +45,10 @@ pub struct Settings {
     pub notify: Notify,
 }
 
-pub const CONFIG_FILE: &'static str = "config.toml";
+const CONFIG_FILE: &'static str = "config.toml";
 
 impl Settings {
-    pub fn load() -> Settings {
+    pub fn load() -> Result<Settings, String> {
         info!("Load config '{}' ...", CONFIG_FILE);
 
         let mut f = File::open(CONFIG_FILE).expect("Can't open config file");
@@ -58,6 +57,11 @@ impl Settings {
 
         f.read_to_string(&mut config_str).expect("Can't read config file");
 
-        toml::decode_str(&config_str).expect("can't decode config string")
+        let mut parser = toml::Parser::new(&config_str);
+        let value = try!(parser.parse()
+                               .ok_or_else(|| format!("Error parsing {:?}", parser.errors)));
+
+        ::rustc_serialize::Decodable::decode(&mut toml::Decoder::new(toml::Value::Table(value)))
+            .map_err(|e| e.to_string())
     }
 }

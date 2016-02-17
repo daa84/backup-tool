@@ -190,6 +190,7 @@ fn test_run(settings: &Settings) {
     if let Err(e) = test_ftp(settings) {
         error!("Error on connecting to ftp {}", e);
     }
+    test_file_format(settings);
     info!("Test finisehd!");
 }
 
@@ -201,17 +202,17 @@ fn test_run_commands(commands: &[String]) {
     }
 }
 
+fn test_file_format(settings: &Settings) {
+    let time_str = strftime(&settings.ftp.backup_suffix_format, &now()).expect("Wrong suffix time format");
+    let target_file_format = format!("{}-{}", settings.ftp.backup_file_name, time_str);
+    let target_file = format!("{}.zip", target_file_format);
+    info!("Target file {}", target_file);
+}
+
 fn test_ftp(settings: &Settings) -> Result<(), Box<Error>> {
     let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port));
     try!(ftp_stream.login(&settings.ftp.user, &settings.ftp.pass));
-
     try!(ftp_stream.change_dir(&settings.ftp.path));
-    let time_str = try!(strftime(&settings.ftp.backup_suffix_format, &now()));
-    let target_file_format = format!("{}-{}", settings.ftp.backup_file_name, time_str);
-
-    let target_file = format!("{}.zip", target_file_format);
-    info!("Target file {}", target_file);
-
     try!(ftp_stream.quit());
     Ok(())
 }

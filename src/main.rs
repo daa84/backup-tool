@@ -52,8 +52,7 @@ fn main() {
     let args = Args::parse();
     if args.cmd_test {
         test_run(&settings);
-    }
-    else {
+    } else {
         backup(&settings);
     }
 }
@@ -95,16 +94,17 @@ fn notify(notify: &Notify, tos: &Vec<String>, subject: &str, body: &str) {
 
     // Connect to a remote server on a custom port
     let mut mailer = SmtpTransportBuilder::new((smtp_host,
-                                                notify.smtp_port)).unwrap()
+                                                465,)).unwrap()
+                                                //notify.smtp_port)).unwrap()
         // Add credentials for authentication
         .credentials(&notify.smtp_user, &notify.smtp_pass)
         // Specify a TLS security level. You can also specify an SslContext with
         // .ssl_context(SslContext::Ssl23)
-        .security_level(SecurityLevel::AlwaysEncrypt)
+        //.security_level(SecurityLevel::AlwaysEncrypt)
         // Enable SMTPUTF8 is the server supports it
-        .smtp_utf8(true)
+        //.smtp_utf8(true)
         // Configure accepted authetication mechanisms
-        .authentication_mecanisms(vec![Mecanism::CramMd5])
+        .authentication_mecanisms(vec![Mecanism::Plain])
         .build();
 
     mailer.send(email).ok().expect("Can't send mail");
@@ -115,7 +115,7 @@ fn run(settings: &Settings) -> Result<(), Box<Error>> {
 
     let temp_dir = try!(TempDir::new("backup-tool"));
     let archive = try!(create_archive(&temp_dir, &settings.src));
-    try!(send_to_ftp(&archive, &settings));
+    try!(FtpAction::new(&settings.ftp).send_to_ftp(&archive));
     Ok(())
 }
 
@@ -148,32 +148,7 @@ fn write_dir(zip: &mut ZipWriter<File>, src: &Src) -> Result<(), Box<Error>> {
     Ok(())
 }
 
-fn send_to_ftp(archive: &Path, settings: &Settings) -> Result<(), Box<Error>> {
-    let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port));
-    try!(ftp_stream.login(&settings.ftp.user, &settings.ftp.pass));
 
-    try!(ftp_stream.change_dir(&settings.ftp.path));
-    let time_str = try!(strftime(&settings.ftp.backup_suffix_format, &now()));
-    let target_file_format = format!("{}-{}", settings.ftp.backup_file_name, time_str);
-
-    let mut target_file = format!("{}.zip", target_file_format);
-    for i in 1..100 {
-        if let Err(_) = ftp_stream.retr(&target_file) {
-            break;
-        }
-
-        if i >= 99 {
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::AlreadyExists,
-                                                    "To match backup files exists")));
-        }
-        target_file = format!("{}-{}.zip", target_file_format, i);
-    }
-    let mut src_file = try!(File::open(archive));
-    try!(ftp_stream.stor(&target_file, &mut src_file));
-
-    try!(ftp_stream.quit());
-    Ok(())
-}
 
 fn run_commands(commands: &[String]) -> Result<(), Box<Error>> {
     info!("Execute commands");
@@ -187,10 +162,10 @@ fn run_commands(commands: &[String]) -> Result<(), Box<Error>> {
 
 fn test_run(settings: &Settings) {
     test_run_commands(&settings.run.commands);
-    if let Err(e) = test_ftp(settings) {
-        error!("Error on connecting to ftp {}", e);
-    }
-    test_file_format(settings);
+
+    let ftp_action = FtpAction::new(&settings.ftp);
+    ftp_action.test_ftp();
+    ftp_action.test_file_format();
     info!("Test finisehd!");
 }
 
@@ -202,18 +177,69 @@ fn test_run_commands(commands: &[String]) {
     }
 }
 
-fn test_file_format(settings: &Settings) {
-    let time_str = strftime(&settings.ftp.backup_suffix_format, &now()).expect("Wrong suffix time format");
-    let target_file_format = format!("{}-{}", settings.ftp.backup_file_name, time_str);
-    let target_file = format!("{}.zip", target_file_format);
-    info!("Target file {}", target_file);
+struct FtpAction<'a> {
+    settings: &'a Ftp,
 }
 
-fn test_ftp(settings: &Settings) -> Result<(), Box<Error>> {
-    let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port));
-    try!(ftp_stream.login(&settings.ftp.user, &settings.ftp.pass));
-    try!(ftp_stream.change_dir(&settings.ftp.path));
-    try!(ftp_stream.quit());
-    Ok(())
-}
+impl<'a> FtpAction<'a> {
+    fn new(ftp: &'a Ftp) -> FtpAction {
+        FtpAction { settings: ftp }
+    }
 
+    fn generate_file_name(&self) -> Result<String, Box<Error>> {
+        let time_str = try!(strftime(&self.settings.backup_suffix_format, &now()));
+        Ok(format!("{}-{}", self.settings.backup_file_name, time_str))
+    }
+
+    fn send_to_ftp(&self, archive: &Path) -> Result<(), Box<Error>> {
+        let mut ftp_stream = try!(self.start_ftp_session());
+
+        let target_file_format = try!(self.generate_file_name());
+        let mut target_file = format!("{}.zip", target_file_format);
+
+        for i in 1..100 {
+            if let Err(_) = ftp_stream.retr(&target_file) {
+                break;
+            }
+
+            if i >= 99 {
+                return Err(Box::new(std::io::Error::new(std::io::ErrorKind::AlreadyExists,
+                                                        "To match backup files exists")));
+            }
+            target_file = format!("{}-{}.zip", target_file_format, i);
+        }
+        let mut src_file = try!(File::open(archive));
+        try!(ftp_stream.stor(&target_file, &mut src_file));
+
+        try!(ftp_stream.quit());
+        Ok(())
+    }
+
+    fn start_ftp_session(&self) -> Result<FTPStream, Box<Error>> {
+        let mut ftp_stream = try!(FTPStream::connect(self.settings.host.to_owned(),
+                                                     self.settings.port));
+        try!(ftp_stream.login(&self.settings.user, &self.settings.pass));
+        try!(ftp_stream.change_dir(&self.settings.path));
+        Ok(ftp_stream)
+    }
+
+    fn test_ftp(&self) {
+        match self._test_ftp() {
+            Ok(_) => info!("Ftp works!"),
+            Err(e) => error!("Error on connecting to ftp: {}", e),
+        };
+    }
+
+    fn _test_ftp(&self) -> Result<(), Box<Error>> {
+        let mut ftp_stream = try!(self.start_ftp_session());
+        try!(ftp_stream.quit());
+        Ok(())
+    }
+
+    fn test_file_format(&self) {
+        match self.generate_file_name() {
+            Ok(file_name) => info!("Target file prefix: {}", file_name),
+            Err(e) => error!("Error in file name format: {}", e),
+        };
+    }
+}

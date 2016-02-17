@@ -8,7 +8,7 @@ user = "user"
 pass = "pass"
 path = "backup_dir"
 backup_file_name = "backup"
-backup_suffix_format = ""
+backup_suffix_format = "%d-%m-%Y"
 
 [[src]]
 prefix = "mongodb"

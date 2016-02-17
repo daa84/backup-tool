@@ -33,8 +33,10 @@ use lettre::transport::smtp::authentication::Mecanism;
 use lettre::transport::EmailTransport;
 
 mod settings;
+mod args;
 
 use settings::*;
+use args::*;
 
 fn main() {
     log4rs::init_file("log.toml", Default::default()).unwrap();
@@ -47,7 +49,17 @@ fn main() {
         Ok(value) => value,
     };
 
-    match run(&settings) {
+    let args = Args::parse();
+    if args.cmd_test {
+        test_run(&settings);
+    }
+    else {
+        backup(&settings);
+    }
+}
+
+fn backup(settings: &Settings) {
+    match run(settings) {
         Err(e) => {
             error!("Error {}", e);
             notify(&settings.notify,
@@ -62,7 +74,7 @@ fn main() {
                    "Backup finished",
                    "Ok");
         }
-    };
+    }
 }
 
 fn notify(notify: &Notify, tos: &Vec<String>, subject: &str, body: &str) {
@@ -172,3 +184,35 @@ fn run_commands(commands: &[String]) -> Result<(), Box<Error>> {
     }
     Ok(())
 }
+
+fn test_run(settings: &Settings) {
+    test_run_commands(&settings.run.commands);
+    if let Err(e) = test_ftp(settings) {
+        error!("Error on connecting to ftp {}", e);
+    }
+    info!("Test finisehd!");
+}
+
+fn test_run_commands(commands: &[String]) {
+    for command in commands {
+        if !Path::new(command).exists() {
+            error!("Command file '{}' does not exists", command)
+        }
+    }
+}
+
+fn test_ftp(settings: &Settings) -> Result<(), Box<Error>> {
+    let mut ftp_stream = try!(FTPStream::connect(settings.ftp.host.to_owned(), settings.ftp.port));
+    try!(ftp_stream.login(&settings.ftp.user, &settings.ftp.pass));
+
+    try!(ftp_stream.change_dir(&settings.ftp.path));
+    let time_str = try!(strftime(&settings.ftp.backup_suffix_format, &now()));
+    let target_file_format = format!("{}-{}", settings.ftp.backup_file_name, time_str);
+
+    let target_file = format!("{}.zip", target_file_format);
+    info!("Target file {}", target_file);
+
+    try!(ftp_stream.quit());
+    Ok(())
+}
+

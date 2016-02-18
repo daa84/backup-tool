@@ -28,8 +28,7 @@ use walkdir::WalkDir;
 use time::{strftime, now};
 
 use lettre::email::EmailBuilder;
-use lettre::transport::smtp::{SecurityLevel, SmtpTransportBuilder};
-use lettre::transport::smtp::authentication::Mecanism;
+use lettre::transport::smtp::SmtpTransportBuilder;
 use lettre::transport::EmailTransport;
 
 mod settings;
@@ -64,7 +63,7 @@ fn backup(settings: &Settings) {
             notify(&settings.notify,
                    &settings.notify.error_address,
                    "Error backup",
-                   e.description());
+                   &format!("Error in backup process: {}", e));
         }
         Ok(_) => {
             info!("Backup finished successfull");
@@ -90,22 +89,12 @@ fn notify(notify: &Notify, tos: &Vec<String>, subject: &str, body: &str) {
         builder = builder.to(to_str);
     }
 
-    let email = builder.sender(smtp_from).subject(&subject).body(&body).build().unwrap();
+    let email = builder.from(smtp_from).subject(&subject).body(&body).build().unwrap();
 
-    // Connect to a remote server on a custom port
-    let mut mailer = SmtpTransportBuilder::new((smtp_host,
-                                                465,)).unwrap()
-                                                //notify.smtp_port)).unwrap()
-        // Add credentials for authentication
-        .credentials(&notify.smtp_user, &notify.smtp_pass)
-        // Specify a TLS security level. You can also specify an SslContext with
-        // .ssl_context(SslContext::Ssl23)
-        //.security_level(SecurityLevel::AlwaysEncrypt)
-        // Enable SMTPUTF8 is the server supports it
-        //.smtp_utf8(true)
-        // Configure accepted authetication mechanisms
-        .authentication_mecanisms(vec![Mecanism::Plain])
-        .build();
+    let mut mailer = SmtpTransportBuilder::new((smtp_host, notify.smtp_port))
+                         .unwrap()
+                         .credentials(&notify.smtp_user, &notify.smtp_pass)
+                         .build();
 
     mailer.send(email).ok().expect("Can't send mail");
 }

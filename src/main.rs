@@ -110,6 +110,7 @@ fn run(settings: &Settings) -> Result<(), Box<Error>> {
 
 fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<PathBuf, Box<Error>> {
     let archive_path = temp_dir.path().join("backup.zip");
+    info!("Create zip archve {}", archive_path.to_str().unwrap());
     let file = try!(File::create(&archive_path));
 
     let mut zip = ZipWriter::new(file);
@@ -123,15 +124,19 @@ fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<PathBuf, Bo
 }
 
 fn write_dir(zip: &mut ZipWriter<File>, src: &Src) -> Result<(), Box<Error>> {
+    info!("Add dir '{}' to archive", src.path);
     for entry in WalkDir::new(&src.path) {
         let dir_entry = try!(entry);
         let path = dir_entry.path();
         let zip_path = Path::new(&src.prefix).join(&path);
 
-        try!(zip.start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Stored));
         if path.is_file() {
+            try!(zip.start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Deflated));
             let mut file_content = try!(File::open(path));
             try!(std::io::copy(&mut file_content, zip));
+        }
+        else {
+            try!(zip.start_file(format!("{}/", zip_path.to_str().unwrap()), zip::CompressionMethod::Stored));
         }
     }
     Ok(())

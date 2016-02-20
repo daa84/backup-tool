@@ -1,0 +1,3 @@
+[submodule "rust-ftp"]
+	path = rust-ftp
+	url = https://github.com/daa84/rust-ftp.git

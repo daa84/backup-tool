@@ -6,7 +6,7 @@ authors = ["daa84 <daa84@inbox.ru>"]
 [dependencies]
 toml = "0.1"
 zip = "0.1"
-ftp = "0.0"
+#ftp = "0.0"
 rustc-serialize = "0.3"
 lettre = "0.5"
 tempdir = "0.3"
@@ -15,3 +15,6 @@ time = "0.1"
 log = "0.3"
 log4rs = "0.3"
 docopt = "0.6"
+
+[dependencies.ftp]
+path = "rust-ftp"

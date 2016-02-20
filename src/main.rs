@@ -21,7 +21,7 @@ use zip::ZipWriter;
 
 use tempdir::TempDir;
 
-use ftp::FTPStream;
+use ftp::FtpStream;
 
 use walkdir::WalkDir;
 
@@ -209,8 +209,8 @@ impl<'a> FtpAction<'a> {
         Ok(())
     }
 
-    fn start_ftp_session(&self) -> Result<FTPStream, Box<Error>> {
-        let mut ftp_stream = try!(FTPStream::connect(self.settings.host.to_owned(),
+    fn start_ftp_session(&self) -> Result<FtpStream, Box<Error>> {
+        let mut ftp_stream = try!(FtpStream::connect(self.settings.host.to_owned(),
                                                      self.settings.port));
         try!(ftp_stream.login(&self.settings.user, &self.settings.pass));
         try!(ftp_stream.change_dir(&self.settings.path));

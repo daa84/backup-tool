@@ -9,6 +9,7 @@ Backup Tool
 Usage:
   backup-tool
   backup-tool test
+  backup-tool zip <src> <dst>
   backup-tool (-h | --help)
 
 Options:
@@ -18,6 +19,9 @@ Options:
 #[derive(RustcDecodable)]
 pub struct Args {
     pub cmd_test: bool,
+    pub cmd_zip: bool,
+    pub arg_src: Option<String>,
+    pub arg_dst: Option<String>,
 }
 
 impl Args {

@@ -49,11 +49,20 @@ fn main() {
     };
 
     let args = Args::parse();
-    if args.cmd_test {
+    if args.cmd_zip {
+        create_zip(&args.arg_src.expect("Arg <src> not given"), &args.arg_dst.expect("Arg <dst> not given"));
+    }
+    else if args.cmd_test {
         test_run(&settings);
     } else {
         backup(&settings);
     }
+}
+
+fn create_zip(src: &str, dst: &str) {
+    let mut zip_action = ZipAction::new(File::create(dst).expect("Can't create <dst> path"));
+    zip_action.write_all(& vec![Src { path: src.to_string(), prefix: "".to_owned() } ]).expect("Error write <src>");
+    zip_action.finish().expect("Error write file");
 }
 
 fn backup(settings: &Settings) {
@@ -113,36 +122,11 @@ fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<PathBuf, Bo
     info!("Create zip archve {}", archive_path.to_str().unwrap());
     let file = try!(File::create(&archive_path));
 
-    let mut zip = ZipWriter::new(file);
-
-    for src in src_list {
-        try!(write_dir(&mut zip, &src));
-    }
-
-    try!(zip.finish());
+    let mut zip_action = ZipAction::new(file);
+    try!(zip_action.write_all(src_list));
+    try!(zip_action.finish());
     Ok(archive_path)
 }
-
-fn write_dir(zip: &mut ZipWriter<File>, src: &Src) -> Result<(), Box<Error>> {
-    info!("Add dir '{}' to archive", src.path);
-    for entry in WalkDir::new(&src.path) {
-        let dir_entry = try!(entry);
-        let path = dir_entry.path();
-        let zip_path = Path::new(&src.prefix).join(&path);
-
-        if path.is_file() {
-            try!(zip.start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Deflated));
-            let mut file_content = try!(File::open(path));
-            try!(std::io::copy(&mut file_content, zip));
-        }
-        else {
-            try!(zip.start_file(format!("{}/", zip_path.to_str().unwrap()), zip::CompressionMethod::Stored));
-        }
-    }
-    Ok(())
-}
-
-
 
 fn run_commands(commands: &[String]) -> Result<(), Box<Error>> {
     info!("Execute commands");
@@ -168,6 +152,53 @@ fn test_run_commands(commands: &[String]) {
         if !Path::new(command).exists() {
             error!("Command file '{}' does not exists", command)
         }
+    }
+}
+
+struct ZipAction {
+    writer: Option<ZipWriter<File>>,
+}
+
+use std::mem;
+
+impl ZipAction {
+    fn new(file: File) -> ZipAction {
+        ZipAction { writer: Some(ZipWriter::new(file)) }
+    }
+
+    fn finish(&mut self) -> Result<(), Box<Error>> {
+        // strange solution because it uses strange zip library
+        let writer = mem::replace(&mut self.writer, None);
+        try!(writer.unwrap().finish());
+        Ok(())
+    }
+
+    fn write_all(&mut self, src_list: &Vec<Src>) -> Result<(), Box<Error>> {
+        for src in src_list {
+            try!(self.write_dir(src));
+        }
+        Ok(())
+    }
+
+    fn write_dir(&mut self, src: &Src) -> Result<(), Box<Error>> {
+        info!("Add dir '{}' to archive", src.path);
+        for entry in WalkDir::new(&src.path) {
+            let dir_entry = try!(entry);
+            let path = dir_entry.path();
+            let zip_path = Path::new(&src.prefix).join(&path);
+            let mut writer = self.writer.as_mut().unwrap();
+
+            if path.is_file() {
+                try!(writer.start_file(zip_path.to_str().unwrap(),
+                                       zip::CompressionMethod::Deflated));
+                let mut file_content = try!(File::open(path));
+                try!(std::io::copy(&mut file_content, &mut writer));
+            } else {
+                try!(writer.start_file(format!("{}/", zip_path.to_str().unwrap()),
+                                       zip::CompressionMethod::Stored));
+            }
+        }
+        Ok(())
     }
 }
 

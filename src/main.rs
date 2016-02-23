@@ -50,9 +50,9 @@ fn main() {
 
     let args = Args::parse();
     if args.cmd_zip {
-        create_zip(&args.arg_src.expect("Arg <src> not given"), &args.arg_dst.expect("Arg <dst> not given"));
-    }
-    else if args.cmd_test {
+        create_zip(&args.arg_src.expect("Arg <src> not given"),
+                   &args.arg_dst.expect("Arg <dst> not given"));
+    } else if args.cmd_test {
         test_run(&settings);
     } else {
         backup(&settings);
@@ -61,7 +61,11 @@ fn main() {
 
 fn create_zip(src: &str, dst: &str) {
     let mut zip_action = ZipAction::new(File::create(dst).expect("Can't create <dst> path"));
-    zip_action.write_all(& vec![Src { path: src.to_string(), prefix: "".to_owned() } ]).expect("Error write <src>");
+    zip_action.write_all(&vec![Src {
+                                   path: src.to_string(),
+                                   prefix: "".to_string(),
+                               }])
+              .expect("Error write <src>");
     zip_action.finish().expect("Error write file");
 }
 
@@ -156,20 +160,16 @@ fn test_run_commands(commands: &[String]) {
 }
 
 struct ZipAction {
-    writer: Option<ZipWriter<File>>,
+    writer: ZipWriter<File>,
 }
-
-use std::mem;
 
 impl ZipAction {
     fn new(file: File) -> ZipAction {
-        ZipAction { writer: Some(ZipWriter::new(file)) }
+        ZipAction { writer: ZipWriter::new(file) }
     }
 
     fn finish(&mut self) -> Result<(), Box<Error>> {
-        // strange solution because it uses strange zip library
-        let writer = mem::replace(&mut self.writer, None);
-        try!(writer.unwrap().finish());
+        try!(self.writer.finish());
         Ok(())
     }
 
@@ -186,16 +186,15 @@ impl ZipAction {
             let dir_entry = try!(entry);
             let path = dir_entry.path();
             let zip_path = Path::new(&src.prefix).join(&path);
-            let mut writer = self.writer.as_mut().unwrap();
 
             if path.is_file() {
-                try!(writer.start_file(zip_path.to_str().unwrap(),
-                                       zip::CompressionMethod::Deflated));
+                try!(self.writer
+                         .start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Deflated));
                 let mut file_content = try!(File::open(path));
-                try!(std::io::copy(&mut file_content, &mut writer));
+                try!(std::io::copy(&mut file_content, &mut self.writer));
             } else {
-                try!(writer.start_file(format!("{}/", zip_path.to_str().unwrap()),
-                                       zip::CompressionMethod::Stored));
+                try!(self.writer.start_file(format!("{}/", zip_path.to_str().unwrap()),
+                                            zip::CompressionMethod::Stored));
             }
         }
         Ok(())

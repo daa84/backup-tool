@@ -2,6 +2,8 @@
 name = "backup-tool"
 version = "0.1.0"
 dependencies = [
+ "chrono 0.2.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cron 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt 0.6.78 (registry+https://github.com/rust-lang/crates.io-index)",
  "ftp 0.0.7",
  "lettre 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -58,6 +60,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "num 0.1.31 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.34 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "cron"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "chrono 0.2.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 0.1.54 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

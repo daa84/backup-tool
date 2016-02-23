@@ -11,6 +11,8 @@ extern crate walkdir;
 extern crate time;
 extern crate lettre;
 
+extern crate chrono;
+
 use std::error::Error;
 use std::io::prelude::*;
 use std::fs::File;
@@ -49,13 +51,33 @@ fn main() {
     };
 
     let args = Args::parse();
-    if args.cmd_zip {
+    if args.cmd_schedule {
+        schedule_backup(&settings,
+                        &args.arg_time.expect("<crontab_expression> must exists"));
+    } else if args.cmd_zip {
         create_zip(&args.arg_src.expect("Arg <src> not given"),
                    &args.arg_dst.expect("Arg <dst> not given"));
     } else if args.cmd_test {
         test_run(&settings);
     } else {
         backup(&settings);
+    }
+}
+
+use chrono::offset::utc::UTC;
+use std::time::Duration;
+use std::thread::sleep;
+
+fn schedule_backup(settings: &Settings, expression: &str) {
+    info!("Start scheduler for '{}'", expression);
+    for datetime in schedule.upcoming() {
+        info!("Next backup at {}", datetime);
+        let start_timestamp = UTC::now().timestamp() as u64;
+        let event_timestamp = datetime.timestamp() as u64;
+        let sleep_time = Duration::from_secs(event_timestamp - start_timestamp);
+        info!("Sleep for {:?} sec", sleep_time);
+
+        sleep(sleep_time);
     }
 }
 

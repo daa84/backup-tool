@@ -123,7 +123,7 @@ fn run(settings: &Settings) -> Result<(), Box<Error>> {
 
 fn create_archive(temp_dir: &TempDir, src_list: &Vec<Src>) -> Result<PathBuf, Box<Error>> {
     let archive_path = temp_dir.path().join("backup.zip");
-    info!("Create zip archve {}", archive_path.to_str().unwrap());
+    info!("Create zip archve {}", archive_path.to_str().unwrap_or("Can't get file name"));
     let file = try!(File::create(&archive_path));
 
     let mut zip_action = ZipAction::new(file);
@@ -160,12 +160,14 @@ fn test_run_commands(commands: &[String]) {
 }
 
 struct ZipAction {
-    writer: ZipWriter<File>,
+    writer: ZipWriter<BufWriter<File>>,
 }
+
+use std::io::BufWriter;
 
 impl ZipAction {
     fn new(file: File) -> ZipAction {
-        ZipAction { writer: ZipWriter::new(file) }
+        ZipAction { writer: ZipWriter::new(BufWriter::with_capacity(10 * 1024 * 1024, file)) }
     }
 
     fn finish(&mut self) -> Result<(), Box<Error>> {
@@ -188,10 +190,18 @@ impl ZipAction {
             let zip_path = Path::new(&src.prefix).join(&path);
 
             if path.is_file() {
-                try!(self.writer
-                         .start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Deflated));
                 let mut file_content = try!(File::open(path));
-                try!(std::io::copy(&mut file_content, &mut self.writer));
+                let metadata = try!(file_content.metadata());
+
+                if metadata.len() > 0 {
+                    try!(self.writer
+                         .start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Deflated));
+                    try!(std::io::copy(&mut file_content, &mut self.writer));
+                }
+                else {
+                    try!(self.writer
+                         .start_file(zip_path.to_str().unwrap(), zip::CompressionMethod::Stored));
+                }
             } else {
                 try!(self.writer.start_file(format!("{}/", zip_path.to_str().unwrap()),
                                             zip::CompressionMethod::Stored));
@@ -216,6 +226,7 @@ impl<'a> FtpAction<'a> {
     }
 
     fn send_to_ftp(&self, archive: &Path) -> Result<(), Box<Error>> {
+        info!("Send backup to ftp");
         let mut ftp_stream = try!(self.start_ftp_session());
 
         let target_file_format = try!(self.generate_file_name());
@@ -233,6 +244,7 @@ impl<'a> FtpAction<'a> {
             target_file = format!("{}-{}.zip", target_file_format, i);
         }
         let mut src_file = try!(File::open(archive));
+        info!("Send file '{}' to '{}'", archive.to_str().unwrap_or("Can't get filename"), target_file);
         try!(ftp_stream.stor(&target_file, &mut src_file));
 
         try!(ftp_stream.quit());

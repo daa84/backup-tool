@@ -2,6 +2,7 @@
 name = "backup-tool"
 version = "0.1.0"
 dependencies = [
+ "chrono 0.2.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt 0.6.78 (registry+https://github.com/rust-lang/crates.io-index)",
  "ftp 0.0.7",
  "lettre 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",

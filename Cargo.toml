@@ -15,6 +15,7 @@ time = "0.1"
 log = "0.3"
 log4rs = "0.3"
 docopt = "0.6"
+chrono = "0.2"
 
 [dependencies.ftp]
 path = "rust-ftp"

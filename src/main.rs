@@ -10,6 +10,7 @@ extern crate zip;
 extern crate walkdir;
 extern crate time;
 extern crate lettre;
+extern crate chrono;
 
 use std::error::Error;
 use std::io::prelude::*;
@@ -33,9 +34,12 @@ use lettre::transport::EmailTransport;
 
 mod settings;
 mod args;
+mod timer;
 
 use settings::*;
 use args::*;
+
+use timer::*;
 
 fn main() {
     log4rs::init_file("log.toml", Default::default()).unwrap();
@@ -70,19 +74,19 @@ fn create_zip(src: &str, dst: &str) {
 }
 
 fn backup(settings: &Settings) {
-    match run(settings) {
-        Err(e) => {
+    match timer::calc_time(run, settings) {
+        Err((e, time)) => {
             error!("Error {}", e);
             notify(&settings.notify,
                    &settings.notify.error_address,
                    "Error backup",
-                   &format!("Error in backup process: {}", e));
+                   &format!("Error in backup process: {}\nExecution time: {}", e, time.to_hhmmss()));
         }
-        Ok(_) => {
+        Ok((_, time)) => {
             info!("Backup finished successfull");
             notify(&settings.notify,
                    &settings.notify.success_address,
-                   "Backup finished",
+                   &format!("Backup finished\nExecution time: {}", time.to_hhmmss()),
                    "Ok");
         }
     }

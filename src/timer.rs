@@ -1,9 +1,10 @@
 
 use chrono::UTC;
-use std::error::Error;
 use std::time::Duration;
 
-pub fn calc_time<A, R>(fun: fn (a: &A) -> Result<R, Box<Error>>, arg: &A) -> Result<(R, Duration), (Box<Error>, Duration)> {
+pub fn calc_time<A, R>(fun: fn(a: &A) -> Result<R, String>,
+                       arg: &A)
+                       -> Result<(R, Duration), (String, Duration)> {
     let start_time = UTC::now().timestamp();
     let res = fun(arg);
     let end_time = UTC::now().timestamp();
@@ -34,6 +35,7 @@ mod tests {
 
     #[test]
     fn test_duration_format() {
-        assert_eq!("01:01:01", Duration::from_secs(60 * 60 + 60 + 1).to_hhmmss());
+        assert_eq!("01:01:01",
+                   Duration::from_secs(60 * 60 + 60 + 1).to_hhmmss());
     }
 }

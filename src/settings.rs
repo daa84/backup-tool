@@ -3,7 +3,7 @@ extern crate toml;
 use std::fs::File;
 use std::io::prelude::*;
 
-#[derive(RustcDecodable)]
+#[derive(RustcDecodable, Clone)]
 pub struct Notify {
     pub error_address: Vec<String>,
     pub success_address: Vec<String>,
@@ -15,7 +15,7 @@ pub struct Notify {
     pub smtp_from: String,
 }
 
-#[derive(RustcDecodable)]
+#[derive(RustcDecodable, Clone)]
 pub struct Ftp {
     pub host: String,
     pub port: u16,
@@ -26,18 +26,18 @@ pub struct Ftp {
     pub backup_suffix_format: String,
 }
 
-#[derive(RustcDecodable)]
+#[derive(RustcDecodable, Clone)]
 pub struct Run {
     pub commands: Vec<String>,
 }
 
-#[derive(RustcDecodable)]
+#[derive(RustcDecodable, Clone)]
 pub struct Src {
     pub path: String,
     pub prefix: String,
 }
 
-#[derive(RustcDecodable)]
+#[derive(RustcDecodable, Clone)]
 pub struct Settings {
     pub run: Run,
     pub ftp: Ftp,

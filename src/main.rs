@@ -10,6 +10,7 @@ extern crate zip;
 extern crate walkdir;
 extern crate time;
 extern crate lettre;
+extern crate chrono;
 
 extern crate chrono;
 
@@ -18,6 +19,7 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
 
 use zip::ZipWriter;
 
@@ -35,9 +37,12 @@ use lettre::transport::EmailTransport;
 
 mod settings;
 mod args;
+mod timer;
 
 use settings::*;
 use args::*;
+
+use timer::*;
 
 fn main() {
     log4rs::init_file("log.toml", Default::default()).unwrap();
@@ -92,19 +97,21 @@ fn create_zip(src: &str, dst: &str) {
 }
 
 fn backup(settings: &Settings) {
-    match run(settings) {
-        Err(e) => {
+    match timer::calc_time(run, settings) {
+        Err((e, time)) => {
             error!("Error {}", e);
             notify(&settings.notify,
                    &settings.notify.error_address,
                    "Error backup",
-                   &format!("Error in backup process: {}", e));
+                   &format!("Error in backup process: {}\nExecution time: {}",
+                            e,
+                            time.to_hhmmss()));
         }
-        Ok(_) => {
+        Ok((_, time)) => {
             info!("Backup finished successfull");
             notify(&settings.notify,
                    &settings.notify.success_address,
-                   "Backup finished",
+                   &format!("Backup finished\nExecution time: {}", time.to_hhmmss()),
                    "Ok");
         }
     }
@@ -134,7 +141,20 @@ fn notify(notify: &Notify, tos: &Vec<String>, subject: &str, body: &str) {
     mailer.send(email).ok().expect("Can't send mail");
 }
 
-fn run(settings: &Settings) -> Result<(), Box<Error>> {
+fn run(settings: &Settings) -> Result<(), String> {
+    // use thread as panic isolation bound
+    let thread_settings = settings.clone();
+    thread::spawn(move || {
+        match _run(&thread_settings) {
+            Ok(_) => (),
+            Err(e) => panic!("{}", e),
+        }
+    })
+        .join()
+        .map_err(|e| e.downcast_ref::<String>().unwrap().to_owned())
+}
+
+fn _run(settings: &Settings) -> Result<(), Box<Error>> {
     try!(run_commands(&settings.run.commands));
 
     let temp_dir = try!(TempDir::new("backup-tool"));

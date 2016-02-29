@@ -38,11 +38,17 @@ pub struct Src {
 }
 
 #[derive(RustcDecodable, Clone)]
+pub struct Schedule {
+    pub time: String,
+}
+
+#[derive(RustcDecodable, Clone)]
 pub struct Settings {
     pub run: Run,
     pub ftp: Ftp,
     pub src: Vec<Src>,
     pub notify: Notify,
+    pub schedule: Option<Schedule>,
 }
 
 const CONFIG_FILE: &'static str = "config.toml";

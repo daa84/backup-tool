@@ -21,10 +21,8 @@ Options:
 pub struct Args {
     pub cmd_test: bool,
     pub cmd_zip: bool,
-    pub cmd_schedule: bool,
     pub arg_src: Option<String>,
     pub arg_dst: Option<String>,
-    pub arg_time: Option<String>,
 }
 
 impl Args {

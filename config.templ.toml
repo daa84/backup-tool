@@ -24,3 +24,5 @@ smtp_pass = ""
 smtp_port = 25
 smtp_from = ""
 
+[schedule]
+time = "10:00"

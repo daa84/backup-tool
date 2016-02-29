@@ -12,14 +12,15 @@ extern crate time;
 extern crate lettre;
 extern crate chrono;
 
-extern crate chrono;
-
 use std::error::Error;
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
+use std::time::Duration;
+
+use chrono::{DateTime, UTC};
 
 use zip::ZipWriter;
 
@@ -56,9 +57,8 @@ fn main() {
     };
 
     let args = Args::parse();
-    if args.cmd_schedule {
-        schedule_backup(&settings,
-                        &args.arg_time.expect("<crontab_expression> must exists"));
+    if settings.schedule.is_some() {
+        schedule_backup(&settings);
     } else if args.cmd_zip {
         create_zip(&args.arg_src.expect("Arg <src> not given"),
                    &args.arg_dst.expect("Arg <dst> not given"));
@@ -69,20 +69,22 @@ fn main() {
     }
 }
 
-use chrono::offset::utc::UTC;
-use std::time::Duration;
-use std::thread::sleep;
+fn schedule_backup(settings: &Settings) {
+    let schedule = settings.schedule.as_ref().unwrap();
 
-fn schedule_backup(settings: &Settings, expression: &str) {
-    info!("Start scheduler for '{}'", expression);
-    for datetime in schedule.upcoming() {
-        info!("Next backup at {}", datetime);
+    let event_time = DateTime::parse_from_str(&schedule.time, "%H:%M").expect("Can't parse schedule time");
+
+    info!("Start scheduler at '{}' every day", schedule.time);
+
+    loop {
         let start_timestamp = UTC::now().timestamp() as u64;
-        let event_timestamp = datetime.timestamp() as u64;
+        let event_timestamp = event_time.timestamp() as u64;
         let sleep_time = Duration::from_secs(event_timestamp - start_timestamp);
-        info!("Sleep for {:?} sec", sleep_time);
+        info!("Sleep for {}", sleep_time.to_hhmmss());
 
-        sleep(sleep_time);
+        thread::sleep(sleep_time);
+
+        backup(settings);
     }
 }
 

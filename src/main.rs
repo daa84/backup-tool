@@ -72,7 +72,8 @@ fn main() {
 fn schedule_backup(settings: &Settings) {
     let schedule = settings.schedule.as_ref().unwrap();
 
-    let event_time = DateTime::parse_from_str(&schedule.time, "%H:%M").expect("Can't parse schedule time");
+    let event_time = DateTime::parse_from_str(&schedule.time, "%H:%M")
+                         .expect("Can't parse schedule time");
 
     info!("Start scheduler at '{}' every day", schedule.time);
 

@@ -10,12 +10,17 @@ extern crate zip;
 extern crate walkdir;
 extern crate time;
 extern crate lettre;
+extern crate chrono;
 
 use std::error::Error;
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
+
+use chrono::{DateTime, UTC};
 
 use zip::ZipWriter;
 
@@ -33,9 +38,12 @@ use lettre::transport::EmailTransport;
 
 mod settings;
 mod args;
+mod timer;
 
 use settings::*;
 use args::*;
+
+use timer::*;
 
 fn main() {
     log4rs::init_file("log.toml", Default::default()).unwrap();
@@ -49,13 +57,34 @@ fn main() {
     };
 
     let args = Args::parse();
-    if args.cmd_zip {
+    if settings.schedule.is_some() {
+        schedule_backup(&settings);
+    } else if args.cmd_zip {
         create_zip(&args.arg_src.expect("Arg <src> not given"),
                    &args.arg_dst.expect("Arg <dst> not given"));
     } else if args.cmd_test {
         test_run(&settings);
     } else {
         backup(&settings);
+    }
+}
+
+fn schedule_backup(settings: &Settings) {
+    let schedule = settings.schedule.as_ref().unwrap();
+
+    let event_time = DateTime::parse_from_str(&schedule.time, "%H:%M").expect("Can't parse schedule time");
+
+    info!("Start scheduler at '{}' every day", schedule.time);
+
+    loop {
+        let start_timestamp = UTC::now().timestamp() as u64;
+        let event_timestamp = event_time.timestamp() as u64;
+        let sleep_time = Duration::from_secs(event_timestamp - start_timestamp);
+        info!("Sleep for {}", sleep_time.to_hhmmss());
+
+        thread::sleep(sleep_time);
+
+        backup(settings);
     }
 }
 
@@ -70,19 +99,21 @@ fn create_zip(src: &str, dst: &str) {
 }
 
 fn backup(settings: &Settings) {
-    match run(settings) {
-        Err(e) => {
+    match timer::calc_time(run, settings) {
+        Err((e, time)) => {
             error!("Error {}", e);
             notify(&settings.notify,
                    &settings.notify.error_address,
                    "Error backup",
-                   &format!("Error in backup process: {}", e));
+                   &format!("Error in backup process: {}\nExecution time: {}",
+                            e,
+                            time.to_hhmmss()));
         }
-        Ok(_) => {
+        Ok((_, time)) => {
             info!("Backup finished successfull");
             notify(&settings.notify,
                    &settings.notify.success_address,
-                   "Backup finished",
+                   &format!("Backup finished\nExecution time: {}", time.to_hhmmss()),
                    "Ok");
         }
     }
@@ -112,7 +143,20 @@ fn notify(notify: &Notify, tos: &Vec<String>, subject: &str, body: &str) {
     mailer.send(email).ok().expect("Can't send mail");
 }
 
-fn run(settings: &Settings) -> Result<(), Box<Error>> {
+fn run(settings: &Settings) -> Result<(), String> {
+    // use thread as panic isolation bound
+    let thread_settings = settings.clone();
+    thread::spawn(move || {
+        match _run(&thread_settings) {
+            Ok(_) => (),
+            Err(e) => panic!("{}", e),
+        }
+    })
+        .join()
+        .map_err(|e| e.downcast_ref::<String>().unwrap().to_owned())
+}
+
+fn _run(settings: &Settings) -> Result<(), Box<Error>> {
     try!(run_commands(&settings.run.commands));
 
     let temp_dir = try!(TempDir::new("backup-tool"));

@@ -8,6 +8,7 @@ Backup Tool
 
 Usage:
   backup-tool
+  backup-tool schedule <time>
   backup-tool test
   backup-tool zip <src> <dst>
   backup-tool (-h | --help)

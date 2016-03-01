@@ -1,5 +1,5 @@
 [run]
-commands = ["E:/daa/backup_scriptsr/backup_mssql.bat"]
+commands = ["E:/path_to/backup_mongodb.bat"]
 
 [ftp]
 host = "localhost"
@@ -12,7 +12,7 @@ backup_suffix_format = "%d-%m-%Y"
 
 [[src]]
 prefix = "mongodb"
-path = "C:/xxx"
+path = "C:/path_to_add_to_archive"
 
 [notify]
 error_address = []
@@ -24,3 +24,5 @@ smtp_pass = ""
 smtp_port = 25
 smtp_from = ""
 
+[schedule]
+time = "10:00"

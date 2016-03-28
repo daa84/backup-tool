@@ -231,7 +231,8 @@ impl ZipAction {
         for entry in WalkDir::new(&src.path) {
             let dir_entry = try!(entry);
             let path = dir_entry.path();
-            let zip_path = Path::new(&src.prefix).join(&path);
+            let local_path = path.strip_prefix(&src.path).expect("Can't get relative file path");
+            let zip_path = Path::new(&src.prefix).join(&local_path);
 
             if path.is_file() {
                 let mut file_content = try!(File::open(path));
